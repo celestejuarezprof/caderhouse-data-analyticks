@@ -55,6 +55,32 @@ Deberías ver 4 categorías, 5 clientes, 6 productos y 10 ventas.
 - **Módulo 6**: conexión de Power BI a esta base de datos para limpieza y transformación.
 - **Módulo 8**: construcción del modelo analítico y medidas DAX.
 
-## Autora
+## Autora 
+juarez celeste 
 
-Celeste Juárez - Coderhouse Data Analytics
+
+## Módulo 4 - Consultas de negocio (`m4_consultas_negocio.sql`)
+
+Este script contiene 4 consultas SQL sobre `Ventas_Tech_DB` orientadas a responder preguntas de negocio:
+
+1. **Resumen ejecutivo mensual**: total facturado, cantidad de pedidos y ticket promedio por mes.
+2. **Ranking de productos**: Top 5 productos por total facturado, con unidades vendidas.
+3. **Clientes recurrentes**: clientes con más de un pedido, ordenados por gasto total.
+4. **Meses por encima/por debajo del promedio**: compara la facturación de cada mes contra el promedio general, usando un CTE (`WITH`).
+
+### Cómo ejecutarlo
+
+Requiere haber corrido antes `ventas_tech_db.sql`, ya que trabaja sobre esa misma base de datos.
+
+1. Abrí `m4_consultas_negocio.sql` en SSMS.
+2. Ejecutá el script completo (F5) o consulta por consulta.
+
+### Hallazgos principales
+
+- El producto 1 concentra el 55,9% de la facturación total, muy por encima del segundo puesto (21%).
+- Tener más de un pedido no implica ser cliente de alto valor: el gasto entre clientes recurrentes varía mucho (de $510 a $2.640).
+- Las 10 ventas cargadas caen todas en marzo de 2024, por lo que la comparación mensual (Consulta 4) todavía no es representativa — haría falta cargar datos de varios meses para un análisis de estacionalidad real.
+
+### Nota de compatibilidad
+
+La consigna original sugiere `EXTRACT(MONTH FROM fecha_venta)` (sintaxis PostgreSQL). En SQL Server se usó el equivalente `MONTH(fecha_venta)`.
