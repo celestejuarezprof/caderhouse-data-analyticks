@@ -84,3 +84,47 @@ Requiere haber corrido antes `ventas_tech_db.sql`, ya que trabaja sobre esa mism
 ### Nota de compatibilidad
 
 La consigna original sugiere `EXTRACT(MONTH FROM fecha_venta)` (sintaxis PostgreSQL). En SQL Server se usó el equivalente `MONTH(fecha_venta)`.
+
+
+
+Módulo 5 - Consultas con JOINs (m5_consultas_joins.sql)
+
+Las consultas de M4 trabajaban sobre tablas individuales. En este módulo se cruzan para obtener una vista enriquecida (ventas + cliente + producto + categoría + región), que es la fuente de datos principal para el dashboard de Power BI (M7).
+
+Ampliación del esquema
+
+La consigna de M5 requería campos que la base original (M3) no tenía todavía, así que este script primero amplía el esquema antes de las consultas:
+
+
+Tabla nueva territorios: id_territorio, nombre_region (AMBA, Centro, Litoral, Cuyo, NOA).
+clientes: se agregan las columnas segmento (Premium / Standard) e id_territorio (FK a territorios).
+ventas: se agrega la columna canal (Online / Presencial).
+Se completan estos datos para los clientes y ventas ya cargados en M3.
+Se agregan 2 clientes nuevos sin compras (Jorge Medina, Sofía Paz), para poder demostrar la Consulta 2 con resultados reales.
+
+
+Las 4 consultas
+
+
+Vista base del proyecto (INNER JOIN): combina ventas, clientes, productos, categorias y territorios en una sola fila por venta — fecha, cliente, segmento, región, producto, categoría, cantidad, precio, total y canal.
+Clientes sin ventas (LEFT JOIN): clientes registrados que todavía no compraron nada, usando WHERE ... IS NULL.
+Productos sin ventas (LEFT JOIN): productos del catálogo sin ninguna venta registrada. En los datos actuales, el único caso es el SSD Externo 1TB.
+Consolidado por canal (UNION ALL): combina las ventas Online y Presencial en un solo resultado y calcula el total facturado por canal con GROUP BY.
+
+
+Cómo ejecutarlo
+
+Requiere haber corrido antes ventas_tech_db.sql (M3), ya que amplía esa misma base de datos.
+
+
+Abrí m5_consultas_joins.sql directamente en SSMS.
+Ejecutá el script completo (F5). Primero corre la ampliación de esquema y después las 4 consultas, mostrando sus resultados en orden.
+
+
+Resultados esperados
+
+
+Consulta 1: 10 filas (una por cada venta, con todos los datos cruzados).
+Consulta 2: 2 filas (los clientes nuevos sin compras).
+Consulta 3: 1 fila (el único producto sin ventas).
+Consulta 4: 2 filas (total facturado por Online y por Presencial).
