@@ -124,6 +124,75 @@ Ejecutá el script completo (F5). Primero corre la ampliación de esquema y desp
 Resultados esperados
 
 
+
+Módulo 6 - Conectividad y transformación en Power BI (documentacion_m6_power_query.md)
+
+Contexto y fuente de datos
+
+El archivo de origen (Production_resultado_en_sql.xlsx) es un reporte exportado desde un sistema legacy de producción, con 1141 filas y 14 columnas. Combina en una sola tabla datos de producto (nombre, color, costo, precio, categoría) con datos de ubicación de depósito — un mismo producto puede estar guardado en más de un lugar, por lo que aparece repetido varias veces con distinta ubicación en cada fila.
+
+1. Carga del archivo
+
+Se utilizó el conector Excel de Power BI Desktop (Obtener datos → Excel), seleccionando la hoja única del archivo y entrando directamente a Transformar datos para trabajar en el Editor de Power Query antes de cargar el modelo final.
+
+2. Transformaciones realizadas (en orden)
+
+a) Renombrado de columnas
+Se reemplazaron los nombres técnicos del sistema original (ProductID, NAME, STOCK_RECOMENDADO, etc.) por nombres descriptivos en snake_case y en español: id_producto, nombre_producto, color, stock_recomendado, punto_reposicion, costo, precio, dias_fabricacion, fecha_inicio_venta, fecha_fin_venta, subcategoria, categoria, id_ubicacion, nombre_ubicacion.
+
+b) Corrección de tipos de datos
+
+ColumnaTipo asignadoJustificaciónid_producto, id_ubicacionNúmero enteroIdentificadores, sin decimalesstock_recomendado, punto_reposicion, dias_fabricacionNúmero enteroCantidades discretascosto, precioNúmero decimalValores monetarios que requieren precisión decimalfecha_inicio_venta, fecha_fin_ventaFechaNecesario para poder filtrar y calcular por tiempo en el modelonombre_producto, color, subcategoria, categoria, nombre_ubicacionTextoDatos categóricos/descriptivos, no se usan en cálculos numéricos
+
+c) Detección de un problema no evidente: "NULL" como texto literal
+
+Al revisar los datos, se detectó que las celdas vacías del archivo original no eran nulos reales, sino el texto literal "NULL" (en mayúsculas), típico de exportaciones de sistemas legacy. Esto se confirmó porque Power Query mostraba el valor en negro normal (NULL) en vez del formato gris/cursiva (null) que usa para nulos verdaderos.
+
+Este detalle tuvo dos consecuencias distintas:
+
+
+En columnas de texto (color, subcategoria, categoria, nombre_ubicacion), el texto "NULL" se cargaba sin error, pero como un valor más de la columna — había que reemplazarlo explícitamente.
+En columnas de fecha (fecha_fin_venta), el intento de convertir el texto "NULL" a tipo Fecha generaba un error de conversión (DataFormat.Error), ya que "NULL" no es una fecha válida.
+
+
+d) Gestión de nulos y duplicados
+
+Se aplicó un criterio distinto según el significado real de cada campo, no una regla única:
+
+
+color: 688 casos con "NULL" → reemplazados por "Sin color". Corresponde a productos (tornillos, rodamientos, piezas metálicas) para los que el atributo color no aplica.
+subcategoria / categoria: 609 casos cada una → reemplazados por "Sin categorizar". Son insumos o componentes sin categoría comercial asignada en el sistema origen.
+nombre_ubicacion: reemplazado por "Sin ubicación asignada" en los casos con "NULL".
+id_ubicacion: se dejó sin modificar (nulo real, no un texto reemplazado). No se justifica inventar un ID numérico (como 0), ya que podría interpretarse como una ubicación real inexistente.
+fecha_fin_venta: se dejó intencionalmente en nulo (no se reemplazó por texto ni por una fecha ficticia). Un nulo en esta columna tiene un significado de negocio válido: el producto sigue vigente a la venta y todavía no tiene fecha de baja. Reemplazarlo distorsionaría cualquier análisis de vigencia de catálogo. Los casos que generaban error de conversión de tipo se resolvieron con "Reemplazar errores" → null, para normalizarlos como nulo real sin perder ese significado.
+Duplicados: no existían filas 100% duplicadas en el archivo original. Lo que sí ocurría era que un mismo id_producto aparecía repetido porque el producto tiene más de una ubicación de depósito — esto no es un duplicado a eliminar, sino una relación uno-a-muchos legítima entre producto y ubicación. Este caso se resolvió normalizando la estructura (ver punto siguiente), no borrando filas.
+
+
+e) Normalización: separación en dos tablas
+
+Siguiendo el mismo criterio que separar datos de cliente y de transacción, se identificaron dos tipos de información mezclados en la tabla original:
+
+
+Atributos del producto (fijos, no cambian entre filas de un mismo id_producto)
+Atributos de la ubicación (variables, cambian según el depósito)
+
+
+Se crearon dos consultas independientes en Power Query:
+
+
+productos: un registro único por id_producto, con el resto de los atributos (nombre, color, costo, precio, fechas, categoría, subcategoría). Se aplicó "Quitar duplicados" sobre id_producto luego de sacar las columnas de ubicación, quedando 504 productos únicos.
+producto_ubicaciones: tabla de relación con id_producto, id_ubicacion y nombre_ubicacion, con 1141 filas (una por cada combinación producto-ubicación). Acá sí es correcto y esperable que se repita el id_producto.
+
+
+3. Resultado final
+
+
+El archivo carga sin errores en Power BI Desktop.
+Las 14 columnas originales quedaron distribuidas en 2 tablas relacionadas por id_producto, cada una con nombres descriptivos y tipos de datos correctos.
+No quedan filas completamente vacías ni duplicados no justificados.
+Los nulos que subsisten (fecha_fin_venta, id_ubicacion) son intencionales y documentados, no datos faltantes sin resolver.
+
+
 Consulta 1: 10 filas (una por cada venta, con todos los datos cruzados).
 Consulta 2: 2 filas (los clientes nuevos sin compras).
 Consulta 3: 1 fila (el único producto sin ventas).
