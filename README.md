@@ -87,93 +87,91 @@ La consigna original sugiere `EXTRACT(MONTH FROM fecha_venta)` (sintaxis Postgre
 
 
 
-Módulo 5 - Consultas con JOINs (m5_consultas_joins.sql)
+## Módulo 5 - Consultas con JOINs (`m5_consultas_joins.sql`)
 
 Las consultas de M4 trabajaban sobre tablas individuales. En este módulo se cruzan para obtener una vista enriquecida (ventas + cliente + producto + categoría + región), que es la fuente de datos principal para el dashboard de Power BI (M7).
 
-Ampliación del esquema
+### Ampliación del esquema
 
 La consigna de M5 requería campos que la base original (M3) no tenía todavía, así que este script primero amplía el esquema antes de las consultas:
 
+- **Tabla nueva `territorios`**: `id_territorio`, `nombre_region` (AMBA, Centro, Litoral, Cuyo, NOA).
+- **`clientes`**: se agregan las columnas `segmento` (Premium / Standard) e `id_territorio` (FK a `territorios`).
+- **`ventas`**: se agrega la columna `canal` (Online / Presencial).
+- Se completan estos datos para los clientes y ventas ya cargados en M3.
+- Se agregan 2 clientes nuevos sin compras (Jorge Medina, Sofía Paz), para poder demostrar la Consulta 2 con resultados reales.
 
-Tabla nueva territorios: id_territorio, nombre_region (AMBA, Centro, Litoral, Cuyo, NOA).
-clientes: se agregan las columnas segmento (Premium / Standard) e id_territorio (FK a territorios).
-ventas: se agrega la columna canal (Online / Presencial).
-Se completan estos datos para los clientes y ventas ya cargados en M3.
-Se agregan 2 clientes nuevos sin compras (Jorge Medina, Sofía Paz), para poder demostrar la Consulta 2 con resultados reales.
+### Las 4 consultas
 
+1. **Vista base del proyecto (INNER JOIN)**: combina `ventas`, `clientes`, `productos`, `categorias` y `territorios` en una sola fila por venta — fecha, cliente, segmento, región, producto, categoría, cantidad, precio, total y canal.
+2. **Clientes sin ventas (LEFT JOIN)**: clientes registrados que todavía no compraron nada, usando `WHERE ... IS NULL`.
+3. **Productos sin ventas (LEFT JOIN)**: productos del catálogo sin ninguna venta registrada. En los datos actuales, el único caso es el SSD Externo 1TB.
+4. **Consolidado por canal (UNION ALL)**: combina las ventas Online y Presencial en un solo resultado y calcula el total facturado por canal con `GROUP BY`.
 
-Las 4 consultas
+### Cómo ejecutarlo
 
+Requiere haber corrido antes `ventas_tech_db.sql` (M3), ya que amplía esa misma base de datos.
 
-Vista base del proyecto (INNER JOIN): combina ventas, clientes, productos, categorias y territorios en una sola fila por venta — fecha, cliente, segmento, región, producto, categoría, cantidad, precio, total y canal.
-Clientes sin ventas (LEFT JOIN): clientes registrados que todavía no compraron nada, usando WHERE ... IS NULL.
-Productos sin ventas (LEFT JOIN): productos del catálogo sin ninguna venta registrada. En los datos actuales, el único caso es el SSD Externo 1TB.
-Consolidado por canal (UNION ALL): combina las ventas Online y Presencial en un solo resultado y calcula el total facturado por canal con GROUP BY.
+1. Abrí `m5_consultas_joins.sql` directamente en SSMS.
+2. Ejecutá el script completo (F5). Primero corre la ampliación de esquema y después las 4 consultas, mostrando sus resultados en orden.
 
+### Resultados esperados
 
-Cómo ejecutarlo
+- Consulta 1: 10 filas (una por cada venta, con todos los datos cruzados).
+- Consulta 2: 2 filas (los clientes nuevos sin compras).
+- Consulta 3: 1 fila (el único producto sin ventas).
+- Consulta 4: 2 filas (total facturado por Online y por Presencial).
 
-Requiere haber corrido antes ventas_tech_db.sql (M3), ya que amplía esa misma base de datos.
+---
 
+## Módulo 6 - Pipeline ETL con Power Query y lenguaje M (`Pipeline_ETL_Juarez_Celeste.pbix`)
 
-Abrí m5_consultas_joins.sql directamente en SSMS.
-Ejecutá el script completo (F5). Primero corre la ampliación de esquema y después las 4 consultas, mostrando sus resultados en orden.
+### Contexto y fuente de datos
 
+Se utilizó el dataset provisto por la cátedra: `Pipeline_ETL_Dataset.xlsx`, con 4 hojas (`clientes`, `productos`, `ventas`, `categorias`) que contienen problemas de calidad intencionales: registros duplicados por clave primaria, valores nulos en campos críticos y filas vacías de más en el rango de datos de Excel.
 
-Resultados esperados
+### 1. Conexión y perfilado
 
+Se conectó Power BI Desktop al archivo mediante el conector de Excel (`Obtener datos → Excel`), seleccionando las 4 tablas requeridas y entrando directamente a **Transformar datos** para trabajar en Power Query antes de confirmar la carga.
 
+### 2. Problema detectado en las 3 tablas: filas vacías "fantasma"
 
-Módulo 6 - Pipeline ETL con Power Query y lenguaje M (Pipeline_ETL_Juarez_Celeste.pbix)
-Contexto y fuente de datos
+Además de los duplicados y nulos ya previstos por la consigna, se encontró que las hojas de Excel traían un rango de datos más amplio del necesario, generando filas completamente vacías al final de cada tabla (por ejemplo, `Fact_Ventas` mostraba 999 filas en vez de las 50 reales). Se resolvieron filtrando por la columna de ID de cada tabla (`Table.SelectRows(..., each [id_X] <> null)`), antes de aplicar cualquier otra transformación.
 
-Se utilizó el dataset provisto por la cátedra: Pipeline_ETL_Dataset.xlsx, con 4 hojas (clientes, productos, ventas, categorias) que contienen problemas de calidad intencionales: registros duplicados por clave primaria, valores nulos en campos críticos y filas vacías de más en el rango de datos de Excel.
+### 3. Transformaciones por tabla
 
-1. Conexión y perfilado
+**Dim_Clientes** (12 filas originales → 11 finales)
+- Se eliminó el registro duplicado (`id_cliente = 1`, María López) con `Table.Distinct` sobre la clave primaria.
+- **Email nulo** (`id_cliente = 9`, Valentina Paz): esta clienta tiene **5 ventas registradas** en `Fact_Ventas`. Eliminar la fila implicaría perder esas transacciones del análisis, así que se reemplazó el nulo por `"sin_email@pendiente.com"`, dejando explícito que el dato queda pendiente de completar.
+- **Ciudad nula** (`id_cliente = 11`, Roberto Díaz): sin ventas todavía, pero es un cliente válido y activo. Se conservó el registro y se reemplazó el nulo por `"sin especificar"`.
 
-Se conectó Power BI Desktop al archivo mediante el conector de Excel (Obtener datos → Excel), seleccionando las 4 tablas requeridas y entrando directamente a Transformar datos para trabajar en Power Query antes de confirmar la carga.
+**Dim_Productos** (13 filas originales → 12 finales)
+- Se eliminó el producto duplicado (`id_producto = 103`, Monitor 4K 27") con `Table.Distinct` sobre la clave primaria.
+- **Precio nulo** (`id_producto = 109`, SSD Externo 1TB): este producto tiene **5 ventas registradas**, y en todas ellas se vendió históricamente a **$130**. En vez de inventar un valor arbitrario, se usó ese precio real ya validado por el histórico de transacciones.
+- **Categoría nula** (`id_producto = 111`, Laptop Gaming Pro): su `subcategoria` ("Laptops") coincide con la de otros productos de la categoría "Computación". Se infirió la categoría por esa relación lógica, en vez de asignar un genérico "Sin Categoría".
 
-2. Problema detectado en las 3 tablas: filas vacías "fantasma"
+**Dim_Categorias** (4 filas)
+- Tabla sin problemas de calidad; solo se corrigieron tipos de datos.
 
-Además de los duplicados y nulos ya previstos por la consigna, se encontró que las hojas de Excel traían un rango de datos más amplio del necesario, generando filas completamente vacías al final de cada tabla (por ejemplo, Fact_Ventas mostraba 999 filas en vez de las 50 reales). Se resolvieron filtrando por la columna de ID de cada tabla (Table.SelectRows(..., each [id_X] <> null)), antes de aplicar cualquier otra transformación.
+**Fact_Ventas** (50 filas)
+- Se corrigió el tipo de la columna `fecha_venta`, que Power Query detectaba automáticamente como número entero (número de serie de Excel) en vez de fecha.
+- Se aplicó un **Merge** con `Dim_Productos` (combinación externa izquierda, uniendo por `id_producto`), expandiendo únicamente las columnas `nombre_producto` y `categoria`. El emparejamiento fue exacto: 50 de 50 filas encontraron su producto correspondiente.
 
-3. Transformaciones por tabla
+### 4. Nomenclatura profesional
 
-Dim_Clientes (12 filas originales → 11 finales)
+Las 4 consultas se renombraron siguiendo el estándar del área: `Dim_Clientes`, `Dim_Productos`, `Dim_Categorias`, `Fact_Ventas`.
 
-Se eliminó el registro duplicado (id_cliente = 1, María López) con Table.Distinct sobre la clave primaria.
-Email nulo (id_cliente = 9, Valentina Paz): esta clienta tiene 5 ventas registradas en Fact_Ventas. Eliminar la fila implicaría perder esas transacciones del análisis, así que se reemplazó el nulo por "sin_email@pendiente.com", dejando explícito que el dato queda pendiente de completar.
-Ciudad nula (id_cliente = 11, Roberto Díaz): sin ventas todavía, pero es un cliente válido y activo. Se conservó el registro y se reemplazó el nulo por "sin especificar".
+### 5. Documentación en lenguaje M
 
-Dim_Productos (13 filas originales → 12 finales)
+Se agregaron comentarios técnicos (`//`) directamente en el Editor Avanzado de `Dim_Clientes` y `Dim_Productos`, explicando el razonamiento de cada decisión (por qué se eliminó cada duplicado, por qué se conservó cada fila con nulo y con qué criterio se reemplazó cada valor), no solo qué paso se ejecutó.
 
-Se eliminó el producto duplicado (id_producto = 103, Monitor 4K 27") con Table.Distinct sobre la clave primaria.
-Precio nulo (id_producto = 109, SSD Externo 1TB): este producto tiene 5 ventas registradas, y en todas ellas se vendió históricamente a $130. En vez de inventar un valor arbitrario, se usó ese precio real ya validado por el histórico de transacciones.
-Categoría nula (id_producto = 111, Laptop Gaming Pro): su subcategoria ("Laptops") coincide con la de otros productos de la categoría "Computación". Se infirió la categoría por esa relación lógica, en vez de asignar un genérico "Sin Categoría".
-
-Dim_Categorias (4 filas)
-
-Tabla sin problemas de calidad; solo se corrigieron tipos de datos.
-
-Fact_Ventas (50 filas)
-
-Se corrigió el tipo de la columna fecha_venta, que Power Query detectaba automáticamente como número entero (número de serie de Excel) en vez de fecha.
-Se aplicó un Merge con Dim_Productos (combinación externa izquierda, uniendo por id_producto), expandiendo únicamente las columnas nombre_producto y categoria. El emparejamiento fue exacto: 50 de 50 filas encontraron su producto correspondiente.
-4. Nomenclatura profesional
-
-Las 4 consultas se renombraron siguiendo el estándar del área: Dim_Clientes, Dim_Productos, Dim_Categorias, Fact_Ventas.
-
-5. Documentación en lenguaje M
-
-Se agregaron comentarios técnicos (//) directamente en el Editor Avanzado de Dim_Clientes y Dim_Productos, explicando el razonamiento de cada decisión (por qué se eliminó cada duplicado, por qué se conservó cada fila con nulo y con qué criterio se reemplazó cada valor), no solo qué paso se ejecutó.
-
-6. Verificación final
+### 6. Verificación final
 
 Al cerrar y aplicar, las 4 tablas cargaron sin errores, con el conteo de filas esperado:
 
-Tabla	Filas
-Dim_Clientes	11
-Dim_Productos	12
-Dim_Categorias	4
-Fact_Ventas	50
+| Tabla | Filas |
+|---|---|
+| Dim_Clientes | 11 |
+| Dim_Productos | 12 |
+| Dim_Categorias | 4 |
+| Fact_Ventas | 50 |
